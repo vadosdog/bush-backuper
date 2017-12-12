@@ -1,0 +1,66 @@
+#!/bin/bash
+
+TODAY=`date +%Y-%m-%d`
+
+FILEDIR=/backups/files/
+BASEDIR=/backups/bases/
+ROOT=root
+DIR=/dir/
+LOGFILE=/backups/logs/log-$TODAY\.log
+DBPASS=pass
+
+mkdir -p $FILEDIR
+mkdir -p $BASEDIR
+
+echo >>$LOGFILE
+
+echo "==========">>$LOGFILE
+echo "$(date +'%Y-%m-%d %R'): Removing old files">>$LOGFILE
+
+find $BASEDIR -name '*.sql' -type f -mtime +2 -exec /bin/rm -fv {} >> $LOGFILE \;
+find $FILEDIR -name '*.tar.gz' -type f -mtime +2 -exec /bin/rm -fv {} >>$LOGFILE \;
+echo "----------" >>$LOGFILE
+
+
+echo "$(date +'%Y-%m-%d %R'): Files backup start" >>$LOGFILE
+
+for FILE in `ls $DIR`; do
+        if [ -d $DIR$FILE ]
+        then
+                mkdir -p $FILEDIR$FILE
+                cd $DIR$FILE
+                tar -czf $FILEDIR$FILE/$FILE-$TODAY.tar.gz .
+                echo "Backup $FILEDIR$FILE/ ">> $LOGFILE
+        fi
+done
+
+cd $DIR
+mkdir -p $FILEDIR$ROOT
+find . -maxdepth 1 -type f -print0 | xargs -0 tar -zcf $FILEDIR$ROOT/$ROOT-$TODAY.tar.gz
+echo "Backup $FILEDIR" >>$LOGFILE
+
+
+FSTATUS=$?
+
+if [[ $FSTATUS != 0 ]]; 
+then
+echo "$(date +'%Y-%m-%d %R'): Files backup failed" >>$LOGFILE
+else 
+echo "$(date +'%Y-%m-%d %R'): Files backup success" >>$LOGFILE
+fi
+
+echo "----------" >>$LOGFILE
+echo "$(date +'%Y-%m-%d %R'): Bases dump start" >>$LOGFILE
+
+for i in `mysql -sN -p'$DBPASS' -e'show databases;' | grep -v information_schema | grep -v performance_schema`; do mkdir -p $BASEDIR$i; mysqldump -f -p'$DBPASS' $i > $BASEDIR$i/$i-$TODAY.sql; echo "Dump base '$i' in $BASEDIR$i/ ">>$LOGFILE;done
+
+BSTATUS=$?
+
+if [[ $BSTATUS != 0 ]];
+then
+echo "$(date +'%Y-%m-%d %R'): Bases dump failed" >>$LOGFILE
+else
+echo "$(date +'%Y-%m-%d %R'): Bases dump success" >>$LOGFILE
+fi
+echo "==========" >>$LOGFILE
+exit
